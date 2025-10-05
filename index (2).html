@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Business Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React UMD -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for in-browser JSX transpilation (only for dev / demo) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      /* small helper for icon sizing used in the original TSX */
+      .icon { width: 1.5rem; height: 1.5rem; display:inline-block; }
+    </style>
+  </head>
+  <body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      // Simple icon replacements (SVGs) to mimic lucide-react icons used in the TSX
+      const Icon = ({ name }) => {
+        const common = { width: 24, height: 24 };
+        switch (name) {
+          case 'Dollar':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H15a3.5 3.5 0 0 1 0 7H6"/></svg>);
+          case 'TrendingUp':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>);
+          case 'Alert':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>);
+          case 'Building':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18"/><path d="M16 3v18"/></svg>);
+          case 'Users':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>);
+          case 'Zap':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>);
+          case 'Droplet':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l-.01.01C9.17 6.49 6 9.6 6 13a6 6 0 0 0 12 0c0-3.4-3.17-6.51-5.99-10.3z"/></svg>);
+          case 'MapPin':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>);
+          case 'Award':
+            return (<svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"/><path d="M8 21l4-3 4 3"/></svg>);
+          default:
+            return null;
+        }
+      };
+
+      function BusinessSimulator() {
+        const [activeTab, setActiveTab] = useState('dashboard');
+        const [company, setCompany] = useState({
+          name: 'Mein Unternehmen',
+          type: 'hotel',
+          balance: 500000,
+          monthlyRevenue: 0,
+          monthlyExpenses: 0,
+          employees: [],
+          buildings: [],
+          location: 'stadt',
+          month: 1,
+        });
+
+        const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+        const [showBuildingForm, setShowBuildingForm] = useState(false);
+        const [marketConditions, setMarketConditions] = useState({
+          electricity: 0.30,
+          water: 5,
+          rentMultiplier: 1.0,
+          demand: 1.0,
+        });
+
+        const companyTypes = {
+          hotel: { name: 'Hotel', revenue: 'Übernachtungen', basePrice: 120 },
+          factory: { name: 'Fabrik', revenue: 'Produktverkauf', basePrice: 50 },
+          office: { name: 'IT-Firma', revenue: 'Dienstleistungen', basePrice: 200 },
+          restaurant: { name: 'Restaurant', revenue: 'Gäste', basePrice: 35 },
+          logistics: { name: 'Logistik', revenue: 'Lieferungen', basePrice: 80 },
+        };
+
+        const employeeTypes = {
+          cleaning: { name: 'Reinigungskraft', salary: 2000, productivity: 1 },
+          it: { name: 'IT-Spezialist', salary: 5000, productivity: 3 },
+          manager: { name: 'Manager', salary: 7000, productivity: 5 },
+          production: { name: 'Produktionsmitarbeiter', salary: 3500, productivity: 2 },
+          security: { name: 'Sicherheit', salary: 2800, productivity: 1 },
+          sales: { name: 'Vertrieb', salary: 4000, productivity: 4 },
+        };
+
+        const buildingTypes = {
+          office: { name: 'Bürogebäude', cost: 800000, monthlyCost: 20000, size: 1000, capacity: 50 },
+          factory: { name: 'Fabrik', cost: 2000000, monthlyCost: 50000, size: 5000, capacity: 200 },
+          warehouse: { name: 'Lagerhalle', cost: 500000, monthlyCost: 15000, size: 3000, capacity: 30 },
+          hotel: { name: 'Hotel', cost: 3000000, monthlyCost: 80000, size: 4000, capacity: 100 },
+          parking: { name: 'Parkplatz', cost: 10000, monthlyCost: 500, size: 200, capacity: 100 },
+        };
+
+        const locations = {
+          stadt: { name: 'Innenstadt', costMultiplier: 1.5, demandMultiplier: 1.3 },
+          dorf: { name: 'Dorf/Vorort', costMultiplier: 0.7, demandMultiplier: 0.8 },
+          industrie: { name: 'Industriegebiet', costMultiplier: 1.0, demandMultiplier: 1.0 },
+          kueste: { name: 'Küstenregion', costMultiplier: 1.8, demandMultiplier: 1.5 },
+        };
+
+        const calculateMonthlyExpenses = () => {
+          const salaries = company.employees.reduce((sum, emp) => sum + employeeTypes[emp.type].salary, 0);
+          const buildingCosts = company.buildings.reduce((sum, bld) => {
+            const baseCost = buildingTypes[bld.type].monthlyCost;
+            return sum + (baseCost * locations[company.location].costMultiplier * marketConditions.rentMultiplier);
+          }, 0);
+
+          const utilities = company.buildings.reduce((sum, bld) => {
+            const size = buildingTypes[bld.type].size;
+            const elec = size * 0.5 * marketConditions.electricity * 720;
+            const water = size * 0.1 * marketConditions.water;
+            return sum + elec + water;
+          }, 0);
+
+          return salaries + buildingCosts + utilities;
+        };
+
+        const calculateMonthlyRevenue = () => {
+          const productivity = company.employees.reduce((sum, emp) => sum + employeeTypes[emp.type].productivity, 0);
+          const capacity = company.buildings.reduce((sum, bld) => sum + buildingTypes[bld.type].capacity, 0);
+          const baseRevenue = companyTypes[company.type].basePrice;
+
+          return productivity * capacity * baseRevenue * locations[company.location].demandMultiplier * marketConditions.demand * 0.3;
+        };
+
+        const advanceMonth = () => {
+          const revenue = calculateMonthlyRevenue();
+          const expenses = calculateMonthlyExpenses();
+          const profit = revenue - expenses;
+
+          setMarketConditions(prev => ({
+            electricity: Math.max(0.20, Math.min(0.50, prev.electricity + (Math.random() - 0.5) * 0.05)),
+            water: Math.max(3, Math.min(8, prev.water + (Math.random() - 0.5) * 0.5)),
+            rentMultiplier: Math.max(0.8, Math.min(1.3, prev.rentMultiplier + (Math.random() - 0.5) * 0.1)),
+            demand: Math.max(0.7, Math.min(1.5, prev.demand + (Math.random() - 0.5) * 0.15)),
+          }));
+
+          setCompany(prev => ({
+            ...prev,
+            balance: prev.balance + profit,
+            monthlyRevenue: revenue,
+            monthlyExpenses: expenses,
+            month: prev.month + 1,
+          }));
+        };
+
+        const addEmployee = (type) => {
+          const cost = employeeTypes[type].salary;
+          if (company.balance < cost * 3) {
+            alert('Nicht genug Kapital für neue Mitarbeiter (mindestens 3 Monatsgehälter nötig)');
+            return;
+          }
+          setCompany(prev => ({
+            ...prev,
+            employees: [...prev.employees, { id: Date.now() + Math.random(), type, name: `${employeeTypes[type].name} ${prev.employees.length + 1}` }],
+          }));
+          setShowEmployeeForm(false);
+        };
+
+        const addBuilding = (type) => {
+          const cost = buildingTypes[type].cost * locations[company.location].costMultiplier;
+          if (company.balance < cost) {
+            alert('Nicht genug Kapital für dieses Gebäude');
+            return;
+          }
+          setCompany(prev => ({
+            ...prev,
+            balance: prev.balance - cost,
+            buildings: [...prev.buildings, { id: Date.now() + Math.random(), type, name: `${buildingTypes[type].name} ${prev.buildings.length + 1}` }],
+          }));
+          setShowBuildingForm(false);
+        };
+
+        const removeEmployee = (id) => {
+          setCompany(prev => ({ ...prev, employees: prev.employees.filter(emp => emp.id !== id) }));
+        };
+
+        const removeBuilding = (id) => {
+          const building = company.buildings.find(b => b.id === id);
+          if (!building) return;
+          const refund = buildingTypes[building.type].cost * 0.6;
+          setCompany(prev => ({ ...prev, balance: prev.balance + refund, buildings: prev.buildings.filter(bld => bld.id !== id) }));
+        };
+
+        useEffect(() => {
+          const revenue = calculateMonthlyRevenue();
+          const expenses = calculateMonthlyExpenses();
+          setCompany(prev => ({ ...prev, monthlyRevenue: revenue, monthlyExpenses: expenses }));
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [company.employees.length, company.buildings.length, company.location, marketConditions]);
+
+        /* UI subcomponents (kept as functions for clarity) */
+        const Dashboard = () => (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100 text-sm">Kontostand</p>
+                    <p className="text-3xl font-bold mt-1">{company.balance.toLocaleString('de-DE')} €</p>
+                  </div>
+                  <div><Icon name="Dollar" /></div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100 text-sm">Einnahmen/Monat</p>
+                    <p className="text-3xl font-bold mt-1">{company.monthlyRevenue.toLocaleString('de-DE')} €</p>
+                  </div>
+                  <div><Icon name="TrendingUp" /></div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg p-6 text-white shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-red-100 text-sm">Ausgaben/Monat</p>
+                    <p className="text-3xl font-bold mt-1">{company.monthlyExpenses.toLocaleString('de-DE')} €</p>
+                  </div>
+                  <div><Icon name="Alert" /></div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-sm">Gewinn/Monat</p>
+                    <p className="text-3xl font-bold mt-1">{(company.monthlyRevenue - company.monthlyExpenses).toLocaleString('de-DE')} €</p>
+                  </div>
+                  <div><Icon name="Award" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Icon name="Building" /> Unternehmensinfo
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between"><span className="text-gray-600">Unternehmenstyp:</span><span className="font-semibold">{companyTypes[company.type].name}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Standort:</span><span className="font-semibold">{locations[company.location].name}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Monat:</span><span className="font-semibold">{company.month}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Mitarbeiter:</span><span className="font-semibold">{company.employees.length}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Gebäude:</span><span className="font-semibold">{company.buildings.length}</span></div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Icon name="TrendingUp" /> Marktbedingungen
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center"><span className="text-gray-600 flex items-center gap-2"><Icon name="Zap" /> Strompreis:</span><span className="font-semibold">{marketConditions.electricity.toFixed(2)} €/kWh</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-600 flex items-center gap-2"><Icon name="Droplet" /> Wasserpreis:</span><span className="font-semibold">{marketConditions.water.toFixed(2)} €/m³</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Mietfaktor:</span><span className={`font-semibold ${marketConditions.rentMultiplier > 1.1 ? 'text-red-600' : 'text-green-600'}`}>{(marketConditions.rentMultiplier * 100).toFixed(0)}%</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Nachfrage:</span><span className={`font-semibold ${marketConditions.demand > 1.1 ? 'text-green-600' : marketConditions.demand < 0.9 ? 'text-red-600' : 'text-gray-900'}`}>{(marketConditions.demand * 100).toFixed(0)}%</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <button onClick={advanceMonth} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 py-4 rounded-lg text-lg font-bold shadow-lg transform transition hover:scale-105">Nächster Monat</button>
+            </div>
+          </div>
+        );
+
+        const EmployeesTab = () => (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Users" /> Mitarbeiter ({company.employees.length})</h2>
+              <button onClick={() => setShowEmployeeForm(!showEmployeeForm)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md transition">+ Mitarbeiter einstellen</button>
+            </div>
+
+            {showEmployeeForm && (
+              <div className="bg-gray-50 rounded-lg p-6 border-2 border-blue-200">
+                <h3 className="text-lg font-bold mb-4">Neuen Mitarbeiter einstellen</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Object.entries(employeeTypes).map(([key, emp]) => (
+                    <div key={key} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-400 cursor-pointer transition" onClick={() => addEmployee(key)}>
+                      <h4 className="font-bold">{emp.name}</h4>
+                      <p className="text-sm text-gray-600">Gehalt: {emp.salary.toLocaleString('de-DE')} €/Monat</p>
+                      <p className="text-sm text-gray-600">Produktivität: {emp.productivity}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+              <table className="w-full">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-6 py-3 text-left font-semibold">Name</th>
+                    <th className="px-6 py-3 text-left font-semibold">Position</th>
+                    <th className="px-6 py-3 text-left font-semibold">Gehalt/Monat</th>
+                    <th className="px-6 py-3 text-left font-semibold">Produktivität</th>
+                    <th className="px-6 py-3 text-left font-semibold">Aktion</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {company.employees.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4">{emp.name}</td>
+                      <td className="px-6 py-4">{employeeTypes[emp.type].name}</td>
+                      <td className="px-6 py-4">{employeeTypes[emp.type].salary.toLocaleString('de-DE')} €</td>
+                      <td className="px-6 py-4">{employeeTypes[emp.type].productivity}</td>
+                      <td className="px-6 py-4"><button onClick={() => removeEmployee(emp.id)} className="text-red-600 hover:text-red-800 font-semibold">Entlassen</button></td>
+                    </tr>
+                  ))}
+                  {company.employees.length === 0 && (
+                    <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">Noch keine Mitarbeiter eingestellt</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <p className="font-semibold">Gesamte Personalkosten: {company.employees.reduce((sum, emp) => sum + employeeTypes[emp.type].salary, 0).toLocaleString('de-DE')} €/Monat</p>
+            </div>
+          </div>
+        );
+
+        const BuildingsTab = () => (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Building" /> Gebäude & Grundstücke ({company.buildings.length})</h2>
+              <button onClick={() => setShowBuildingForm(!showBuildingForm)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md transition">+ Gebäude bauen</button>
+            </div>
+
+            {showBuildingForm && (
+              <div className="bg-gray-50 rounded-lg p-6 border-2 border-blue-200">
+                <h3 className="text-lg font-bold mb-4">Neues Gebäude errichten</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(buildingTypes).map(([key, bld]) => {
+                    const totalCost = bld.cost * locations[company.location].costMultiplier;
+                    const canAfford = company.balance >= totalCost;
+                    return (
+                      <div key={key} className={`bg-white rounded-lg p-4 border ${canAfford ? 'border-gray-200 hover:border-blue-400 cursor-pointer' : 'border-red-200 opacity-60 cursor-not-allowed'} transition`} onClick={() => canAfford && addBuilding(key)}>
+                        <h4 className="font-bold text-lg">{bld.name}</h4>
+                        <p className="text-sm text-gray-600 mt-2">Baukosten: {totalCost.toLocaleString('de-DE')} €</p>
+                        <p className="text-sm text-gray-600">Unterhalt: {(bld.monthlyCost * locations[company.location].costMultiplier).toLocaleString('de-DE')} €/Monat</p>
+                        <p className="text-sm text-gray-600">Größe: {bld.size} m²</p>
+                        <p className="text-sm text-gray-600">Kapazität: {bld.capacity}</p>
+                        {!canAfford && <p className="text-red-600 text-sm font-semibold mt-2">Nicht genug Kapital</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {company.buildings.map((bld) => (
+                <div key={bld.id} className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                  <h3 className="text-xl font-bold mb-3">{bld.name}</h3>
+                  <div className="space-y-2 text-sm text-gray-600 mb-4">
+                    <p>Größe: {buildingTypes[bld.type].size} m²</p>
+                    <p>Kapazität: {buildingTypes[bld.type].capacity}</p>
+                    <p>Unterhalt: {(buildingTypes[bld.type].monthlyCost * locations[company.location].costMultiplier * marketConditions.rentMultiplier).toLocaleString('de-DE')} €/Monat</p>
+                  </div>
+                  <button onClick={() => removeBuilding(bld.id)} className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold transition">Verkaufen (60% Rückerstattung)</button>
+                </div>
+              ))}
+              {company.buildings.length === 0 && (
+                <div className="col-span-full bg-gray-50 rounded-lg p-8 text-center text-gray-500 border-2 border-dashed border-gray-300">Noch keine Gebäude errichtet</div>
+              )}
+            </div>
+          </div>
+        );
+
+        const SettingsTab = () => (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold">Unternehmenseinstellungen</h2>
+
+            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+              <h3 className="text-xl font-bold mb-4">Unternehmenstyp</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Object.entries(companyTypes).map(([key, type]) => (
+                  <div key={key} className={`p-4 rounded-lg border-2 cursor-pointer transition ${company.type === key ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`} onClick={() => setCompany(prev => ({ ...prev, type: key }))}>
+                    <h4 className="font-bold">{type.name}</h4>
+                    <p className="text-sm text-gray-600">{type.revenue}</p>
+                    <p className="text-sm text-gray-600">Basis: {type.basePrice} €</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Icon name="MapPin" /> Standortwahl</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(locations).map(([key, loc]) => (
+                  <div key={key} className={`p-4 rounded-lg border-2 cursor-pointer transition ${company.location === key ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`} onClick={() => setCompany(prev => ({ ...prev, location: key }))}>
+                    <h4 className="font-bold">{loc.name}</h4>
+                    <p className="text-sm text-gray-600">Kostenfaktor: {(loc.costMultiplier * 100).toFixed(0)}%</p>
+                    <p className="text-sm text-gray-600">Nachfrage: {(loc.demandMultiplier * 100).toFixed(0)}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+
+        const FinancialTab = () => {
+          return (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Dollar" /> Finanzübersicht & BWA</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
+                  <h3 className="text-lg font-bold mb-3 text-gray-700">Einnahmen</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between"><span className="text-gray-600">Umsatz/Monat:</span><span className="font-semibold text-green-600">{company.monthlyRevenue.toLocaleString('de-DE')} €</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">Basis-Preis:</span><span className="font-semibold">{companyTypes[company.type].basePrice} €</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">Produktivität:</span><span className="font-semibold">{company.employees.reduce((sum, emp) => sum + employeeTypes[emp.type].productivity, 0)}</span></div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
+                  <h3 className="text-lg font-bold mb-3 text-gray-700">Ausgaben</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between"><span className="text-gray-600">Personalkosten:</span><span className="font-semibold text-red-600">{company.employees.reduce((sum, emp) => sum + employeeTypes[emp.type].salary, 0).toLocaleString('de-DE')} €</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">Immobilien:</span><span className="font-semibold text-red-600">{company.buildings.reduce((sum, bld) => sum + (buildingTypes[bld.type].monthlyCost * locations[company.location].costMultiplier * marketConditions.rentMultiplier), 0).toLocaleString('de-DE')} €</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">Betriebskosten:</span><span className="font-semibold text-red-600">{company.buildings.reduce((sum, bld) => { const size = buildingTypes[bld.type].size; return sum + (size * 0.5 * marketConditions.electricity * 720) + (size * 0.1 * marketConditions.water); }, 0).toLocaleString('de-DE')} €</span></div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
+                  <h3 className="text-lg font-bold mb-3 text-gray-700">Ergebnis</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between"><span className="text-gray-600">Gewinn/Monat:</span><span className={`font-bold text-xl ${(company.monthlyRevenue - company.monthlyExpenses) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(company.monthlyRevenue - company.monthlyExpenses).toLocaleString('de-DE')} €</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">Gewinnmarge:</span><span className="font-semibold">{company.monthlyRevenue > 0 ? ((company.monthlyRevenue - company.monthlyExpenses) / company.monthlyRevenue * 100).toFixed(1) : 0}%</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">ROI (geschätzt):</span><span className="font-semibold">{company.monthlyRevenue > 0 ? (((company.monthlyRevenue - company.monthlyExpenses) * 12) / Math.max(500000 - company.balance, 1) * 100).toFixed(1) : 0}%</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                <h3 className="text-xl font-bold mb-4">Kostenaufschlüsselung</h3>
+                <div className="space-y-3">
+                  {company.employees.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg"><span className="font-semibold flex items-center gap-2"><Icon name="Users" /> Personalkosten ({company.employees.length} Mitarbeiter)</span><span className="font-bold text-red-600">{company.employees.reduce((sum, emp) => sum + employeeTypes[emp.type].salary, 0).toLocaleString('de-DE')} €</span></div>
+                  )}
+                  {company.buildings.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg"><span className="font-semibold flex items-center gap-2"><Icon name="Building" /> Gebäudekosten ({company.buildings.length} Gebäude)</span><span className="font-bold text-orange-600">{company.buildings.reduce((sum, bld) => sum + (buildingTypes[bld.type].monthlyCost * locations[company.location].costMultiplier * marketConditions.rentMultiplier), 0).toLocaleString('de-DE')} €</span></div>
+                  )}
+                  {company.buildings.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg"><span className="font-semibold flex items-center gap-2"><Icon name="Zap" /> Strom & Wasser</span><span className="font-bold text-yellow-600">{company.buildings.reduce((sum, bld) => { const size = buildingTypes[bld.type].size; return sum + (size * 0.5 * marketConditions.electricity * 720) + (size * 0.1 * marketConditions.water); }, 0).toLocaleString('de-DE')} €</span></div>
+                  )}
+                </div>
+              </div>
+
+              {(company.monthlyRevenue - company.monthlyExpenses) < 0 && (
+                <div className="bg-red-100 border-l-4 border-red-600 p-4 rounded-lg">
+                  <div className="flex items-center gap-3"><Icon name="Alert" /><div><h4 className="font-bold text-red-800">Warnung: Verlustgeschäft!</h4><p className="text-red-700">Ihr Unternehmen macht derzeit Verlust. Überprüfen Sie Ihre Kostenstruktur oder erhöhen Sie die Einnahmen.</p></div></div>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const MapTab = () => (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="MapPin" /> Standortkarte & Übersicht</h2>
+
+            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-xl font-bold mb-4">Aktueller Standort</h3>
+                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg p-8 text-white shadow-xl">
+                    <Icon name="MapPin" />
+                    <h4 className="text-3xl font-bold mb-2">{locations[company.location].name}</h4>
+                    <div className="space-y-2 text-blue-100">
+                      <p>Kostenfaktor: {(locations[company.location].costMultiplier * 100).toFixed(0)}%</p>
+                      <p>Nachfragemultiplikator: {(locations[company.location].demandMultiplier * 100).toFixed(0)}%</p>
+                      <p>Gebäude vor Ort: {company.buildings.length}</p>
+                      <p>Gesamtfläche: {company.buildings.reduce((sum, bld) => sum + buildingTypes[bld.type].size, 0).toLocaleString('de-DE')} m²</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold mb-4">Gebäudeübersicht</h3>
+                  <div className="space-y-3">
+                    {company.buildings.length > 0 ? (company.buildings.map((bld) => (
+                      <div key={bld.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center gap-3"><Icon name="Building" /><div className="flex-1"><h4 className="font-bold">{bld.name}</h4><p className="text-sm text-gray-600">{buildingTypes[bld.type].size} m² | Kapazität: {buildingTypes[bld.type].capacity}</p></div></div>
+                      </div>
+                    ))) : (
+                      <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-500 border-2 border-dashed border-gray-300"><Icon name="Building" className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>Keine Gebäude am Standort</p></div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+              <h3 className="text-xl font-bold mb-4">Andere verfügbare Standorte</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Object.entries(locations).filter(([key]) => key !== company.location).map(([key, loc]) => (
+                  <div key={key} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-300 hover:border-blue-400 transition cursor-pointer" onClick={() => setCompany({...company, location: key})}>
+                    <h4 className="font-bold text-lg mb-2">{loc.name}</h4>
+                    <p className="text-sm text-gray-600">Kosten: {(loc.costMultiplier * 100).toFixed(0)}%</p>
+                    <p className="text-sm text-gray-600">Nachfrage: {(loc.demandMultiplier * 100).toFixed(0)}%</p>
+                    <button className="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition">Hierher umziehen</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 p-4">
+            <div className="max-w-7xl mx-auto">
+              <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg shadow-2xl p-6 mb-6">
+                <h1 className="text-4xl font-bold mb-2">{company.name}</h1>
+                <p className="text-blue-100">Virtuelles Unternehmens-Management System</p>
+              </header>
+
+              <div className="bg-white rounded-lg shadow-lg mb-6 overflow-hidden">
+                <div className="flex flex-wrap border-b border-gray-200">
+                  <button onClick={() => setActiveTab('dashboard')} className={`flex-1 min-w-[120px] py-4 px-4 font-semibold transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>Dashboard</button>
+                  <button onClick={() => setActiveTab('financial')} className={`flex-1 min-w-[120px] py-4 px-4 font-semibold transition ${activeTab === 'financial' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>Finanzen</button>
+                  <button onClick={() => setActiveTab('employees')} className={`flex-1 min-w-[120px] py-4 px-4 font-semibold transition ${activeTab === 'employees' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>Mitarbeiter</button>
+                  <button onClick={() => setActiveTab('buildings')} className={`flex-1 min-w-[120px] py-4 px-4 font-semibold transition ${activeTab === 'buildings' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>Gebäude</button>
+                  <button onClick={() => setActiveTab('map')} className={`flex-1 min-w-[120px] py-4 px-4 font-semibold transition ${activeTab === 'map' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>Karte</button>
+                  <button onClick={() => setActiveTab('settings')} className={`flex-1 min-w-[120px] py-4 px-4 font-semibold transition ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>Einstellungen</button>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                {activeTab === 'dashboard' && <Dashboard />}
+                {activeTab === 'financial' && <FinancialTab />}
+                {activeTab === 'employees' && <EmployeesTab />}
+                {activeTab === 'buildings' && <BuildingsTab />}
+                {activeTab === 'map' && <MapTab />}
+                {activeTab === 'settings' && <SettingsTab />}
+              </div>
+
+              <footer className="mt-6 text-center text-gray-600 text-sm">Monat {company.month} | {companyTypes[company.type].name} in {locations[company.location].name}</footer>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<BusinessSimulator />);
+    </script>
+  </body>
+</html>
